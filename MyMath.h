@@ -1,6 +1,10 @@
 #pragma once
 #include <cmath>
 
+struct Vector2 {
+	float x, y;
+};
+
 struct Vector4 {
 	float x, y, z, w;
 };
@@ -17,6 +21,11 @@ struct Transform {
 	Vector3 scale;
 	Vector3 rotate;
 	Vector3 translate;
+};
+
+struct VertexData {
+	Vector4 position;
+	Vector2 texcoord;
 };
 
 struct TransformationMatrix {
