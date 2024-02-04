@@ -270,6 +270,28 @@ void UpLoadTextureData(ID3D12Resource* texture, const DirectX::ScratchImage& mip
 
 }
 
+//struct CameraForGPU {
+//	Vector3 worldPosition;
+//};
+//
+//struct Camera {
+//	float32_t3 worldPosition;
+//};
+//
+//ConstantBuffer<Camera> gCamera : register(b2);
+//
+//D3D12_ROOT_PARAMETER rootParameters[5] = {};
+//
+//rootParameter[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+//rootParameter[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+//rootParameter[4].Descriptor.ShaderRegister = 2;
+//
+//ID3D12Resource* cameraResource = CreateBufferResource(device, sizeof(CameraForGPU));
+//
+//CameraForGPU* cameraData = nullptr;
+//
+//cameraResource->Map(0, nullptr, reinterpret_cast<void**>(&cameraData));
+
 
 //windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
@@ -531,6 +553,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			vertexData[start].position.w = 1.0f;
 			vertexData[start].texcoord.x = float(lonIndex) / float(kSubdivision);
 			vertexData[start].texcoord.y = 1.0f - float(latIndex) / float(kSubdivision);
+			vertexData[start].normal.x = vertexData[start].position.x;
+			vertexData[start].normal.y = vertexData[start].position.y;
+			vertexData[start].normal.z = vertexData[start].position.z;
+
 			//b
 			vertexData[start + 1].position.x = cos(lat + kLatEvery) * cos(lon);
 			vertexData[start + 1].position.y = sin(lat + kLatEvery);
@@ -538,6 +564,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			vertexData[start + 1].position.w = 1.0f;
 			vertexData[start + 1].texcoord.x = float(lonIndex) / float(kSubdivision);
 			vertexData[start + 1].texcoord.y = 1.0f - float(latIndex + 1) / float(kSubdivision);
+			vertexData[start + 1].normal.x = vertexData[start + 1].position.x;
+			vertexData[start + 1].normal.y = vertexData[start + 1].position.y;
+			vertexData[start + 1].normal.z = vertexData[start + 1].position.z;
 			//c
 			vertexData[start + 2].position.x = cos(lat) * cos(lon + kLonEvery);
 			vertexData[start + 2].position.y = sin(lat);
@@ -645,7 +674,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	assert(SUCCEEDED(hr));
 
 	//InputLayout
-	D3D12_INPUT_ELEMENT_DESC inputElementDescs[2] = {};
+	D3D12_INPUT_ELEMENT_DESC inputElementDescs[3] = {};
 	inputElementDescs[0].SemanticName = "POSITION";
 	inputElementDescs[0].SemanticIndex = 0;
 	inputElementDescs[0].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -654,6 +683,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	inputElementDescs[1].SemanticIndex = 0;
 	inputElementDescs[1].Format = DXGI_FORMAT_R32G32_FLOAT;
 	inputElementDescs[1].AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+	inputElementDescs[2].SemanticName = "NORMAL";
+	inputElementDescs[2].SemanticIndex = 0;
+	inputElementDescs[2].Format = DXGI_FORMAT_R32G32B32_FLOAT;
+	inputElementDescs[2].AlignedByteOffset =
+		D3D12_APPEND_ALIGNED_ELEMENT;
+
 	D3D12_INPUT_LAYOUT_DESC inputLayoutDesc{};
 	inputLayoutDesc.pInputElementDescs = inputElementDescs;
 	inputLayoutDesc.NumElements = _countof(inputElementDescs);
@@ -748,24 +783,35 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 
 	//マテリアル用のリソースを作る。今回はcolor１つ分のサイズを用意する
-	ID3D12Resource* materialResource = CreateBufferResource(device, sizeof(Vector4));
+	ID3D12Resource* materialResource = CreateBufferResource(device, sizeof(Material));
 	Vector4 color = { 1.0f, 0.0f, 0.0f, 1.0f };
 	//マテリアルにデータを書き込む
-	Vector4* materialData = nullptr;
+	Material* materialData = nullptr;
 	//書き込むためのアドレスを取得
 	materialResource->Map(0, nullptr, reinterpret_cast<void**>(&materialData));
 	//今回は赤を書き込んでみる
-	*materialData = color;
+	materialData->color = color;
+	materialData->enableLighting = true;
 
+	ID3D12Resource* directionLightResource =
+		CreateBufferResource(device, sizeof(DirectionalLight));
+	DirectionalLight* directionLightData = nullptr;
+	directionLightResource->Map(0, nullptr,
+		reinterpret_cast<void**>(&directionLightData));
+
+	directionLightData->color = { 1.0f,1.0f,1.0f,1.0f };
+	directionLightData->direction = { 0.0f,-1.0f,0.0f };
+	directionLightData->intensity = 1.0f;
 
 	//WVP用のリソースを作る。Matrix4x4 1つ分のサイズを用意する
-	ID3D12Resource* wvpResource = CreateBufferResource(device, sizeof(Matrix4x4));
+	ID3D12Resource* wvpResource = CreateBufferResource(device, sizeof(TransformationMatrix));
 	//データを書き込む
-	Matrix4x4* transformationMatrixData = nullptr;
+	TransformationMatrix* transformationMatrixData = nullptr;
 	//書き込むためのアドレスを取得
 	wvpResource->Map(0, nullptr, reinterpret_cast<void**>(&transformationMatrixData));
 	//単位行列を書き込んでおく
-	*transformationMatrixData = MakeIdentity4x4();
+	transformationMatrixData ->WVP = MakeIdentity4x4();
+	transformationMatrixData->World = MakeIdentity4x4();
 
 	//Transform変数を作る
 	Transform triangleTransform{ {1.0f,1.0f,1.0f},{0.0f,0.0f,0.0f},{0.0f,0.0f,0.0f} };
@@ -969,8 +1015,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			Matrix4x4 viewMatrix = Inverse(cameraMatrix);
 			Matrix4x4 projectionMatrix = MakePerspectiveFovMatrix(0.45f, float(kClientWidth) / float(kClientHeight), 0.1f, 100.0f);
 			Matrix4x4 worldViewProjectionMatrix = Multiply(worldmatrix, Multiply(viewMatrix, projectionMatrix));
-			*transformationMatrixData = worldViewProjectionMatrix;
-			*materialData = color;
+			transformationMatrixData -> WVP = worldViewProjectionMatrix;
+			materialData -> color = color;
+			transformationMatrixData -> World = worldmatrix;
+
 
 			//パーティクルの処理
 			for (uint32_t index = 0; index < kNumInstance; ++index) {
@@ -1034,7 +1082,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			commandList->SetGraphicsRootConstantBufferView(1, wvpResource->GetGPUVirtualAddress());
 			//SRVのDescriptorTableの先頭を設定。2はrootParameter[2]である。
 			commandList->SetGraphicsRootDescriptorTable(2, textureSrvHandleGPU);
-
+			commandList->SetGraphicsRootConstantBufferView(3, directionLightResource->GetGPUVirtualAddress());
 			//形状を設定。PSOに設定しているものとはまた別。同じものを設定すると考えておけばよい
 			commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			//描画
