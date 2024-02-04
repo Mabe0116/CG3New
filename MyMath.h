@@ -37,12 +37,17 @@ struct TransformationMatrix {
 struct Material {
 	Vector4 color;
 	int32_t enableLighting;
+	float shininess;
 };
 
 struct DirectionalLight {
 	Vector4 color;
 	Vector3 direction;
 	float intensity;
+};
+
+struct CameraForGPU {
+		Vector3 worldPosition;
 };
 
 Matrix4x4 Inverse(const Matrix4x4& m);
